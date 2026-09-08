@@ -1,0 +1,18 @@
+# Secrets — never commit these
+.env
+app/data/credentials.json
+app/data/token.json
+
+# Generated data — regenerated at runtime, not source code
+app/data/chroma/
+app/data/app.db
+app/data/app.log
+
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OS
+.DS_Store
