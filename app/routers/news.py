@@ -7,7 +7,7 @@ from app.services.chunking import make_chunk_records
 from app.services.vector_store import add_chunks, delete_by_source
 from app.services.hybrid_search import hybrid_query
 from app.services.llm_service import chat, build_rag_prompt, LLMServiceError
-from app.services.conversation import save_message, get_recent_history, rewrite_query_with_history
+from app.services.conversation import save_message, get_recent_history, rewrite_query_with_history, list_sessions, get_session_messages, delete_session
 
 router = APIRouter(prefix="/news", tags=["news"], dependencies=[Depends(require_api_key)])
 
@@ -35,7 +35,7 @@ async def fetch_news(req: FetchRequest):
             if not text.strip():
                 continue
             source_label = entry.get("link", topic)
-            delete_by_source(COLLECTION, source_label)  # idempotent re-fetch
+            delete_by_source(COLLECTION, source_label)
             records = make_chunk_records(text, source=source_label)
             if not records:
                 continue
@@ -43,6 +43,22 @@ async def fetch_news(req: FetchRequest):
             total_indexed += len(records)
 
     return {"topics_fetched": req.topics, "chunks_indexed": total_indexed}
+
+
+@router.get("/sessions")
+async def list_chat_sessions(limit: int = 15):
+    return {"sessions": list_sessions(MODULE, limit=limit)}
+
+
+@router.get("/sessions/{session_id}")
+async def get_chat_session(session_id: str):
+    return {"messages": get_session_messages(MODULE, session_id)}
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_chat_session(session_id: str):
+    delete_session(MODULE, session_id)
+    return {"deleted": session_id}
 
 
 class QueryRequest(BaseModel):
@@ -70,8 +86,4 @@ async def query_news(req: QueryRequest):
         save_message(req.session_id, MODULE, "user", req.question)
         save_message(req.session_id, MODULE, "assistant", answer)
 
-    return {
-        "answer": answer,
-        "standalone_question": standalone_question,
-        "sources": [{"source": r["source"]} for r in retrieved],
-    }
+    return {"answer": answer, "standalone_question": standalone_question, "sources": [{"source": r["source"]} for r in retrieved]}

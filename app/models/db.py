@@ -15,16 +15,15 @@ class Transaction(Base):
     description = Column(String, nullable=False)
     amount = Column(Float, nullable=False)
     category = Column(String, nullable=True)
+    source = Column(String, nullable=True)  # e.g. filename, or "pasted text" — which upload this came from
 
 
 class ChatMessage(Base):
-    """Stores per-session conversation history, used to make follow-up
-    questions ('what about the second one?') resolvable across turns."""
     __tablename__ = "chat_messages"
     id = Column(Integer, primary_key=True)
     session_id = Column(String, nullable=False, index=True)
-    module = Column(String, nullable=False)  # "docs", "github", "gmail", "news"
-    role = Column(String, nullable=False)  # "user" or "assistant"
+    module = Column(String, nullable=False)
+    role = Column(String, nullable=False)
     content = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 

@@ -139,10 +139,13 @@ def build_rag_prompt(question: str, retrieved_chunks: list[dict]) -> tuple[str, 
 
     system_prompt = (
         "You are a helpful assistant that answers questions using ONLY the "
-        "provided context below. If the answer is not contained in the context, "
-        "say clearly that you don't have that information — do not guess or "
-        "use outside knowledge. When you answer, cite which source number "
-        "supports each claim, like [Source 1]."
+        "provided context below. If the user is just greeting you or making "
+        "small talk (e.g. 'hi', 'thanks', 'how are you'), respond naturally "
+        "and briefly instead of refusing — small talk doesn't need grounding. "
+        "For actual factual questions, if the answer is not contained in the "
+        "context, say clearly that you don't have that information — do not "
+        "guess or use outside knowledge. When you answer a factual question, "
+        "cite which source number supports each claim, like [Source 1]."
     )
     user_message = f"Context:\n\n{context}\n\nQuestion: {question}"
     return system_prompt, user_message

@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     tmdb_api_key: str = ""
     news_api_key: str = ""
     github_token: str = ""
+    github_username: str = "yashaspm01"
 
     # Comma-separated list — add your real frontend URL once deployed.
     # Never use "*" once this API touches real personal data.

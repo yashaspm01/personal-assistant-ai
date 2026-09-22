@@ -17,9 +17,19 @@ def _tokenize(text: str) -> list[str]:
     return text.lower().split()
 
 
-def hybrid_query(collection_name: str, question: str, top_k: int = 5, candidate_pool: int = 20) -> list[dict]:
+def hybrid_query(
+    collection_name: str, question: str, top_k: int = 5, candidate_pool: int = 20,
+    where: dict | None = None,
+) -> list[dict]:
+    """
+    `where` scopes both the vector and BM25 halves to matching metadata
+    (e.g. {"repo": "owner/name"}) — critical for collections that hold
+    content from multiple sources (like GitHub, where every indexed repo
+    shares one collection), so a query never retrieves chunks from the
+    wrong repo/source.
+    """
     collection = get_collection(collection_name)
-    all_data = collection.get(include=["documents", "metadatas"])
+    all_data = collection.get(include=["documents", "metadatas"], where=where)
     all_ids = all_data["ids"]
     all_docs = all_data["documents"]
     all_metas = all_data["metadatas"]
@@ -28,7 +38,7 @@ def hybrid_query(collection_name: str, question: str, top_k: int = 5, candidate_
         return []
 
     # --- Vector ranking ---
-    vector_results = vector_query(collection_name, question, top_k=min(candidate_pool, len(all_ids)))
+    vector_results = vector_query(collection_name, question, top_k=min(candidate_pool, len(all_ids)), where=where)
     vector_rank = {r["chunk_id"]: i for i, r in enumerate(vector_results)}
 
     # --- BM25 keyword ranking ---

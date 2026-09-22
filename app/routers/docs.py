@@ -4,10 +4,10 @@ from pydantic import BaseModel
 from app.services.auth import require_api_key
 from app.services.doc_loader import extract_text
 from app.services.chunking import make_chunk_records
-from app.services.vector_store import add_chunks, delete_by_source
+from app.services.vector_store import add_chunks, delete_by_source, list_sources
 from app.services.hybrid_search import hybrid_query
 from app.services.llm_service import chat, build_rag_prompt, LLMServiceError
-from app.services.conversation import save_message, get_recent_history, rewrite_query_with_history
+from app.services.conversation import save_message, get_recent_history, rewrite_query_with_history, list_sessions, get_session_messages, delete_session
 
 router = APIRouter(prefix="/docs", tags=["docs"], dependencies=[Depends(require_api_key)])
 
@@ -37,11 +37,38 @@ async def upload_document(file: UploadFile = File(...)):
     return {"filename": file.filename, "chunks_created": len(records), "status": "indexed"}
 
 
+@router.get("/files")
+async def list_files():
+    return {"files": list_sources(COLLECTION)}
+
+
+@router.delete("/files")
+async def delete_file(filename: str):
+    delete_by_source(COLLECTION, filename)
+    return {"deleted": filename}
+
+
+@router.get("/sessions")
+async def list_chat_sessions(limit: int = 15):
+    return {"sessions": list_sessions(MODULE, limit=limit)}
+
+
+@router.get("/sessions/{session_id}")
+async def get_chat_session(session_id: str):
+    return {"messages": get_session_messages(MODULE, session_id)}
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_chat_session(session_id: str):
+    delete_session(MODULE, session_id)
+    return {"deleted": session_id}
+
+
 class QueryRequest(BaseModel):
     question: str
     top_k: int = 5
     provider: str | None = None
-    session_id: str | None = None  # pass any string to enable multi-turn memory
+    session_id: str | None = None
 
 
 @router.post("/query")

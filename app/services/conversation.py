@@ -1,11 +1,10 @@
 """
-Conversation memory. Two responsibilities:
+Conversation memory. Three responsibilities:
 1. Persist per-session message history (SQLite — fine at personal scale).
-2. Rewrite follow-up questions into standalone queries before retrieval —
-   this is the actual mechanism that makes memory useful. Retrieval only
-   works on the text you give it; "what about the second one?" retrieves
-   nothing useful on its own, but rewritten as "What is the Finger Vein
-   Authentication project?" (using history) it retrieves correctly.
+2. Rewrite follow-up questions into standalone queries before retrieval.
+3. List conversations (sessions) for a "Recent" sidebar, and restore a
+   full conversation's messages when one is picked — the way ChatGPT/Claude
+   sidebars work (one entry per conversation, not per message).
 """
 from app.models.db import SessionLocal, ChatMessage
 from app.services.llm_service import chat, LLMServiceError
@@ -30,7 +29,7 @@ def get_recent_history(session_id: str, module: str, limit: int = 6) -> list[dic
             .limit(limit)
             .all()
         )
-        rows.reverse()  # chronological order for the prompt
+        rows.reverse()
         return [{"role": r.role, "content": r.content} for r in rows]
     finally:
         db.close()
@@ -53,6 +52,60 @@ def rewrite_query_with_history(question: str, history: list[dict], provider: str
         rewritten = chat(system_prompt, user_message, provider=provider, max_tokens=200)
         return rewritten.strip()
     except LLMServiceError:
-        # Non-critical enhancement — fall back to the original question
-        # rather than failing the whole request over query rewriting.
         return question
+
+
+def list_sessions(module: str, limit: int = 15) -> list[dict]:
+    """Groups messages into conversations (one entry per session_id) —
+    NOT one entry per message. Title is the first user message in that
+    session; sessions ordered by most recent activity."""
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(ChatMessage)
+            .filter(ChatMessage.module == module)
+            .order_by(ChatMessage.id.asc())
+            .all()
+        )
+        sessions: dict[str, dict] = {}
+        for r in rows:
+            s = sessions.setdefault(
+                r.session_id,
+                {"session_id": r.session_id, "title": None, "last_updated": r.created_at},
+            )
+            if s["title"] is None and r.role == "user":
+                s["title"] = r.content[:60]
+            s["last_updated"] = r.created_at
+
+        ordered = sorted(sessions.values(), key=lambda s: s["last_updated"], reverse=True)
+        return ordered[:limit]
+    finally:
+        db.close()
+
+
+def get_session_messages(module: str, session_id: str) -> list[dict]:
+    """Full message history for one conversation — used to resume it."""
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(ChatMessage)
+            .filter(ChatMessage.module == module, ChatMessage.session_id == session_id)
+            .order_by(ChatMessage.id.asc())
+            .all()
+        )
+        return [{"role": r.role, "content": r.content} for r in rows]
+    finally:
+        db.close()
+
+
+def delete_session(module: str, session_id: str):
+    """Deletes every message in one conversation — powers the 'remove'
+    button on a History entry."""
+    db = SessionLocal()
+    try:
+        db.query(ChatMessage).filter(
+            ChatMessage.module == module, ChatMessage.session_id == session_id
+        ).delete()
+        db.commit()
+    finally:
+        db.close()
